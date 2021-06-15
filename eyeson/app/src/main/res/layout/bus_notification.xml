@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    android:background="@drawable/background"
+    android:orientation="vertical">
+
+    <Button
+        android:id="@+id/QRcode"
+        android:layout_gravity="right"
+        android:layout_width="124px"
+        android:layout_height="125px"
+        android:layout_margin="10dp"
+        android:background="@drawable/qrcode" />
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="3"/>
+
+    <EditText
+        android:id="@+id/voiceText"
+        android:layout_width="match_parent"
+        android:layout_height="82dp"
+        android:visibility="invisible"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <Button
+            android:id="@+id/buttonId2"
+            android:layout_gravity="bottom"
+            android:layout_width="540px"
+            android:layout_height="597px"
+            android:background="@drawable/button"
+            android:text="취소"
+            android:textColor="@color/black"
+            android:textSize="48sp" />
+        <Button
+            android:id="@+id/buttonId"
+            android:layout_gravity="bottom"
+            android:layout_width="540px"
+            android:layout_height="597px"
+            android:background="@drawable/button"
+            android:text="승차"
+            android:textColor="@color/black"
+            android:textSize="48sp" />
+    </LinearLayout>
+</LinearLayout>
