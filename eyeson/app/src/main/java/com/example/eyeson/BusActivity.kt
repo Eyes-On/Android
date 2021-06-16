@@ -99,7 +99,7 @@ class BusActivity : AppCompatActivity(), LocationListener {
         objintent = intent //인텐드 변수 선언
         obj = objintent.getParcelableExtra<UUID_Parcelable>("uuidObj")!! //UUID_Parcelable 형태값 받아오기
         uuid = obj?.uu_id.toString() //uuid 가져오기
-        mqttClient = MyMqtt(applicationContext, "tcp://15.164.46.54:1883")
+        mqttClient = MyMqtt(applicationContext, "tcp://172.30.1.52:1883")
         locationMgr = getSystemService(Context.LOCATION_SERVICE) as LocationManager //위치서비스 쓸 변수 설정
         try {
             mqttClient.setCallback(::onReceived) // mqtt가 들어오면 onReceived 실행
