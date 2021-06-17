@@ -1,13 +1,9 @@
 package com.example.eyeson
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.*
-import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
@@ -22,9 +18,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.room.Room
 import com.example.eyeson.classFile.MyMqtt
 import com.example.eyeson.classFile.MyTableDB
 import com.example.eyeson.classFile.RaspberryId
@@ -33,6 +27,7 @@ import com.google.zxing.integration.android.IntentIntegrator
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import java.io.IOException
 import java.util.*
+import kotlinx.coroutines.*
 
 class BusActivity : AppCompatActivity(), LocationListener {
 
@@ -69,6 +64,9 @@ class BusActivity : AppCompatActivity(), LocationListener {
     //음성이 발생되면 처리하고 싶은 기능을 구현
     lateinit var utteranceId:String
 
+    //스마트글래스 등록취소를 위한 플래그변수
+    var glassFlag = 1
+
     // 화면 생성 부분
     override fun onCreate(savedInstanceState: Bundle?) {
 
@@ -84,10 +82,8 @@ class BusActivity : AppCompatActivity(), LocationListener {
 //            var ruuid =ruuidList[i]
 //        }
         ruuid = androidDb?.select().toString() //내장디비에 저장된 것 불러낸 후 스트링형태로 변환
-        ruuid = ruuid.replace("[","").replace("]","") // [] 제거
+        ruuid = ruuid.replace("[", "").replace("]", "") // [] 제거
 
-        //스마트글래스 등록취소를 위한 플래그변수
-        var glassFlag = 1
 
         //layout id값 찾기
         var buttonId = findViewById<Button>(R.id.buttonId) // 승차버튼
@@ -100,7 +96,7 @@ class BusActivity : AppCompatActivity(), LocationListener {
         obj = objintent.getParcelableExtra<UUID_Parcelable>("uuidObj")!! //UUID_Parcelable 형태값 받아오기
         uuid = obj?.uu_id.toString() //uuid 가져오기
         mqttClient = MyMqtt(applicationContext, "tcp://172.30.1.52:1883")
-        locationMgr = getSystemService(Context.LOCATION_SERVICE) as LocationManager //위치서비스 쓸 변수 설정
+        locationMgr = getSystemService(LOCATION_SERVICE) as LocationManager //위치서비스 쓸 변수 설정
         try {
             mqttClient.setCallback(::onReceived) // mqtt가 들어오면 onReceived 실행
             mqttClient.connect(arrayOf<String>("eyeson/$uuid")) //eyeson/$uuid로 들어오면 실행
@@ -122,11 +118,11 @@ class BusActivity : AppCompatActivity(), LocationListener {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-        != PackageManager.PERMISSION_GRANTED) {
+                != PackageManager.PERMISSION_GRANTED) {
             //2. 권한이 없는 경우 권한을 설정하는 메시지를 띄운다.
             permission_state = false
             ActivityCompat.requestPermissions(
-                    this, arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.RECORD_AUDIO),
+                    this, arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.RECORD_AUDIO),
                     1000)
         } else {
             permission_state = true
@@ -138,7 +134,6 @@ class BusActivity : AppCompatActivity(), LocationListener {
         }
 
 
-
         //음성기능 객체 설정
         stt_intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
         stt_intent?.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
@@ -148,10 +143,8 @@ class BusActivity : AppCompatActivity(), LocationListener {
         //음성기능 상태에따른 설정
         var listener = (object : RecognitionListener {
             //startListening()호출 후 음성이 입력되기 전 상태
-
             override fun onReadyForSpeech(params: Bundle?) {
-                //화면에 잠깐 나왔다가 꺼지는 Toast실행
-                printToast("음성인식을 시작합니다.")
+                Log.d("recog", "시작부")
             }
 
             //음성이 입력되고 있는 상태
@@ -211,7 +204,7 @@ class BusActivity : AppCompatActivity(), LocationListener {
             //음성 인식을 마치고 결과가 나온 상태
             override fun onResults(results: Bundle?) {
                 //현재 데이터가 있을 경우 비우기
-                if(data != null){
+                if (data != null) {
                     data?.clear()
                     voiceMsg = ""
                 }
@@ -224,16 +217,16 @@ class BusActivity : AppCompatActivity(), LocationListener {
                 voiceMsg = edittool?.text.toString()
 
 
-                if(glassFlag == 1){
+                if (glassFlag == 1) {
                     //버스번호나 목적지를 안받았을때
-                    if(reservation == "") {
-                        if(voiceMsg == ""){
+                    if (reservation == "") {
+                        if (voiceMsg == "") {
                             ttsObj?.speak("다시한번 말씀해주십시오", TextToSpeech.QUEUE_FLUSH, null,
                                     this.hashCode().toString() + "0")
                             Handler(Looper.myLooper()!!).postDelayed({
                                 recognizer?.startListening(stt_intent)
                             }, 2000)
-                        }else {
+                        } else {
                             //음성인식된게 있으면
                             reservation = voiceMsg
                             Log.d("recog", "$voiceMsg")
@@ -243,13 +236,13 @@ class BusActivity : AppCompatActivity(), LocationListener {
                                 recognizer?.startListening(stt_intent)
                             }, 4500)
                         }
-                    }else{ //버스번호나 목적지를 받았을때
+                    } else { //버스번호나 목적지를 받았을때
                         if (voiceMsg == "예") { //음성인식된게 "예"이면
                             Log.d("mqtt", "onResults")
-                            publish("android/" +  "$btnStatus/" + "$reservation/" +"$latitude/" + "${longitude}")
+                            publish("android/" + "$btnStatus/" + "$reservation/" + "$latitude/" + "${longitude}")
                             data?.clear()
                             voiceMsg = ""
-                        } else if(voiceMsg in "아니오" .. "아니요") { //음성인식된게 "아니오"이면
+                        } else if (voiceMsg in "아니오".."아니요") { //음성인식된게 "아니오"이면
                             ttsObj?.speak("승차예약을 취소합니다.", TextToSpeech.QUEUE_FLUSH, null,
                                     utteranceId)
                             data?.clear()
@@ -257,7 +250,7 @@ class BusActivity : AppCompatActivity(), LocationListener {
                             reservation = ""
                             busStation = ""
                             busLicenseNum = ""
-                        }else {
+                        } else {
                             ttsObj?.speak("다시한번 말씀해주십시오", TextToSpeech.QUEUE_FLUSH, null,
                                     utteranceId)
                             Handler(Looper.myLooper()!!).postDelayed({
@@ -267,8 +260,8 @@ class BusActivity : AppCompatActivity(), LocationListener {
                     }
 
                     Log.d("recog", "onResults")
-                //스마트글래스 삭제여부 확인
-                }else{
+                    //스마트글래스 삭제여부 확인
+                } else {
                     if (voiceMsg == "예") { //음성인식된게 "예"이면
                         androidDb?.delete("$ruuid")
 //                        printToast("${androidDb?.select().toString().replace("[","").replace("]","") }")
@@ -278,11 +271,11 @@ class BusActivity : AppCompatActivity(), LocationListener {
                         glassFlag = 1
                         data?.clear()
                         voiceMsg = ""
-                    } else if(voiceMsg in "아니오" .. "아니요") { //음성인식된게 "아니오"이면
+                    } else if (voiceMsg in "아니오".."아니요") { //음성인식된게 "아니오"이면
                         data?.clear()
                         voiceMsg = ""
                         glassFlag = 1
-                    }else {
+                    } else {
                         ttsObj?.speak("다시한번 말씀해주십시오", TextToSpeech.QUEUE_FLUSH, null,
                                 utteranceId)
                         Handler(Looper.myLooper()!!).postDelayed({
@@ -290,7 +283,7 @@ class BusActivity : AppCompatActivity(), LocationListener {
                         }, 2000)
                     }
                 }
-                }
+            }
 
         })
         // 음성인식 인스턴스 얻기
@@ -298,13 +291,68 @@ class BusActivity : AppCompatActivity(), LocationListener {
         // 해당 인스턴스에 콜백 리스너 등록
         recognizer?.setRecognitionListener(listener)
 
-
         //QR코드 실행
         qrcode.setOnClickListener {
             //등록되어있지 않으면
-            if (androidDb?.select().toString().replace("[","").replace("]","") == "" ) {
+            qrcodeReg(it)
+        }
+
+        //승차 버튼 클릭 시 실행
+        buttonId.setOnClickListener {
+                if (ruuid == "") {
+                    ttsObj?.speak("스마트글래스를 등록해주십시오", TextToSpeech.QUEUE_FLUSH, null,
+                            utteranceId)
+                } else {
+                    if (btnStatus == "riding") {
+                        Log.d("mqtt", "riding진입")
+                        publish("android/busStation/$latitude/$longitude")
+
+                    } else if (btnStatus == "busTime") {
+                        publish("android/busTime/$target_stId/$target_busRouteId/$target_ord")
+                    } else if (btnStatus == "getOff") {
+                        buttonId.text = "승차"
+                        publish("android/driver/$busLicenseNum/$btnStatus/$busStation")
+                        data?.clear()
+                        voiceMsg = ""
+                        reservation = ""
+                        busStation = ""
+                        busLicenseNum = ""
+                        btnStatus = "riding"
+                    }
+                }
+
+        }
+        //승차예약취소버튼
+        buttonId2.setOnClickListener {
+                if (ruuid == "") {
+                    ttsObj?.speak("스마트글래스를 등록해주십시오", TextToSpeech.QUEUE_FLUSH, null,
+                            utteranceId)
+                } else {
+                    onDestroy()
+                    if (btnStatus == "busTime") {
+                        ttsObj?.speak("승차예약을 취소합니다.", TextToSpeech.QUEUE_FLUSH, null,
+                                utteranceId)
+                        data?.clear()
+                        btnStatus = "riding"
+                        voiceMsg = ""
+                        reservation = ""
+                        busStation = ""
+                        busLicenseNum = ""
+                        buttonId.text = "승차"
+                    } else {
+                        ttsObj?.speak("취소할 예약이 없습니다.", TextToSpeech.QUEUE_FLUSH, null,
+                                utteranceId)
+                    }
+                }
+        }
+
+    }
+    suspend fun qrcodeReg(it: View){
+        val job = GlobalScope.launch {
+
+            if (androidDb?.select().toString().replace("[", "").replace("]", "") == "") {
                 startBarcodeReader(it) //큐알코드 스캐너 실행
-            }else{ //등록되어있으면 예,아니오를 통해 등록된 스마트 글래스 삭제
+            } else { //등록되어있으면 예,아니오를 통해 등록된 스마트 글래스 삭제
                 glassFlag = 0
                 ttsObj?.speak("등록된 스마트글래스를 삭제하시겠습니까?", TextToSpeech.QUEUE_FLUSH, null,
                         utteranceId)
@@ -313,57 +361,12 @@ class BusActivity : AppCompatActivity(), LocationListener {
                 }, 3700)
             }
         }
-        //승차 버튼 클릭 시 실행
-        buttonId.setOnClickListener {
-            if (ruuid == ""){
-                ttsObj?.speak("스마트글래스를 등록해주십시오", TextToSpeech.QUEUE_FLUSH, null,
-                        utteranceId)
-            }else{
-                if (btnStatus == "riding")
-                {
-                    publish("android/busStation/$latitude/$longitude")
-
-                } else if (btnStatus == "busTime") {
-                    publish("android/busTime/$target_stId/$target_busRouteId/$target_ord")
-                } else if (btnStatus == "getOff") {
-                    buttonId.text = "승차"
-                    publish("android/driver/$busLicenseNum/$btnStatus/$busStation")
-                    data?.clear()
-                    voiceMsg = ""
-                    reservation = ""
-                    busStation = ""
-                    busLicenseNum = ""
-                    btnStatus = "riding"
-                }
-            }
-        }
-        //승차예약취소버튼
-        buttonId2.setOnClickListener {
-            if (ruuid == ""){
-                ttsObj?.speak("스마트글래스를 등록해주십시오", TextToSpeech.QUEUE_FLUSH, null,
-                        utteranceId)
-            }else{
-                if (btnStatus=="busTime"){
-                    ttsObj?.speak("승차예약을 취소합니다.", TextToSpeech.QUEUE_FLUSH, null,
-                            utteranceId)
-                    data?.clear()
-                    btnStatus = "riding"
-                    voiceMsg = ""
-                    reservation = ""
-                    busStation = ""
-                    busLicenseNum = ""
-                    buttonId.text = "승차"
-                }else{
-                    ttsObj?.speak("취소할 예약이 없습니다.", TextToSpeech.QUEUE_FLUSH, null,
-                            utteranceId)
-                }
-            }
-            }
-
     }
+
     //mqtt publish
     fun publish(data: String) {
         //mqttClient 의 publish기능의의 메소드를 호출
+        Log.d("mqtt", "fun진입")
         mqttClient.publish("eyeson/$uuid", data)
     }
     //라즈베리파이id pub(스마트글래스)
@@ -479,8 +482,8 @@ class BusActivity : AppCompatActivity(), LocationListener {
     fun getLocation() {
         var currentLatLng: Location? = null
         //권한 확인
-        if(ActivityCompat.checkSelfPermission(this,android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this,android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
+        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
             return
         }
         //GPS PROVIDER 이용
@@ -613,3 +616,4 @@ class BusActivity : AppCompatActivity(), LocationListener {
         }
     }
 }
+
