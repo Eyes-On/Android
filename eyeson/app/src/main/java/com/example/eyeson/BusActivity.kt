@@ -26,6 +26,8 @@ import org.altbeacon.beacon.*
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import java.io.IOException
 import java.util.*
+import kotlin.math.round
+import kotlin.math.roundToInt
 
 class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
 
@@ -64,12 +66,12 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
 
     //비콘 관련 변수
     private var beaconManager: BeaconManager? = null
-    var beaconDistance = 0.0
+    var beaconDistance:Float = 0f
 
     // 감지된 비콘들을 임시로 담을 리스트
     private val beaconList: MutableList<Beacon> = ArrayList()
 
-    lateinit var handler : Handler
+    lateinit var beaconHandler : Handler
     //스마트글래스 등록취소를 위한 플래그변수
     var glassFlag = 1
 
@@ -101,11 +103,11 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
         objintent = intent //인텐드 변수 선언
         obj = objintent.getParcelableExtra<UUID_Parcelable>("uuidObj")!! //UUID_Parcelable 형태값 받아오기
         uuid = obj?.uu_id.toString() //uuid 가져오기
-        mqttClient = MyMqtt(applicationContext, "tcp://172.30.1.52:1883")
+        mqttClient = MyMqtt(applicationContext, "tcp://13.124.134.89:1883")
         locationMgr = getSystemService(LOCATION_SERVICE) as LocationManager //위치서비스 쓸 변수 설정
         try {
             mqttClient.setCallback(::onReceived) // mqtt가 들어오면 onReceived 실행
-            mqttClient.connect(arrayOf<String>("eyeson/$uuid")) //eyeson/$uuid로 들어오면 실행
+            mqttClient.connect(arrayOf<String>("eyeson/busTime")) //eyeson/$uuid로 들어오면 실행
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -125,8 +127,8 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
-//                || ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED
-//                || ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED
+               || ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED
                 )
         {
             //2. 권한이 없는 경우 권한을 설정하는 메시지를 띄운다.
@@ -156,7 +158,7 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
         // 비콘 탐지를 시작한다. 실제로는 서비스를 시작하는것.
         beaconManager!!.bind(this)
 
-        handler = object : Handler(Looper.myLooper()!!) {
+        beaconHandler = object : Handler(Looper.myLooper()!!) {
             override fun handleMessage(msg: Message) {
                 super.handleMessage(msg)
 
@@ -166,8 +168,9 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
 
                 // 비콘의 아이디와 거리를 측정하여 textView에 넣는다.
                 for (beacon in beaconList) {
-                    Log.d("beacon", "포문 진입")
-                    beaconDistance = beacon.distance
+                    Log.d("beacon", "포문 진입 $beaconDistance")
+//                    beaconDistance = (beaconDistance*10).roundToInt() / 10f
+                    beaconDistance = (beacon.distance*10).roundToInt() / 10f
 //                    textView.append(
 //                            "ID : " + beacon.id2 + " / " + "Distance : " + String.format(
 //                                    "%.3f",
@@ -409,9 +412,9 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
             override fun didRangeBeaconsInRegion(beacons: MutableCollection<Beacon>?, region: Region?) {
                 // 비콘이 감지되면 해당 함수가 호출된다. Collection<Beacon> beacons에는 감지된 비콘의 리스트가,
                 // region에는 비콘들에 대응하는 Region 객체가 들어온다.
-                Log.d("mylog", "addRangeNotifier 진입, 사이즈: ${beacons!!.size}")
+                Log.d("beacon", "addRangeNotifier 진입, 사이즈: ${beacons!!.size}")
                 if (beacons!!.size > 0) {
-                    Log.d("mylog", "비콘 감지 OK, size:${beacons!!.size}")
+                    Log.d("beacon", "비콘 감지 OK, size:${beacons!!.size}")
                 }
                 if (beacons.size > 0) {
                     beaconList.clear()
@@ -423,7 +426,7 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
         })
 
         try{
-            Log.d("mylog", "비콘매니저 monitor실행")
+            Log.d("beacon", "비콘매니저 monitor실행")
             beaconManager!!.startRangingBeaconsInRegion(
                     Region(
                             "myRangingUniqueId",
@@ -468,7 +471,7 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
                 // 아래에 있는 handleMessage를 부르는 함수. 맨 처음에는 0초간격이지만 한번 호출되고 나면
                 // 1초마다 불러온다.
                 Log.d("beacon", "비콘 실행")
-                handler.sendEmptyMessage(0)
+                beaconHandler.sendEmptyMessage(0)
                 buttonId.text = "버스남은시간안내"
                 reservation = msgList[2]
                 var arrival = msgList[3]
