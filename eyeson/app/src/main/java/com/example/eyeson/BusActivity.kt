@@ -1,17 +1,12 @@
 package com.example.eyeson
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.*
-import android.os.Build
+import android.os.*
 import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -20,21 +15,21 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.room.Room
 import com.example.eyeson.classFile.MyMqtt
 import com.example.eyeson.classFile.MyTableDB
 import com.example.eyeson.classFile.RaspberryId
 import com.example.eyeson.dataFile.UUID_Parcelable
 import com.google.zxing.integration.android.IntentIntegrator
+import org.altbeacon.beacon.*
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import java.io.IOException
 import java.util.*
 
-class BusActivity : AppCompatActivity(), LocationListener {
+class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
 
     private var permission_state = false //음성인식 권한 상태
     var stt_intent: Intent? = null //음성인식기능 객체담을 객체 선언
@@ -68,6 +63,15 @@ class BusActivity : AppCompatActivity(), LocationListener {
 
     //음성이 발생되면 처리하고 싶은 기능을 구현
     lateinit var utteranceId:String
+
+    //비콘 관련 변수
+    private var beaconManager: BeaconManager? = null
+    var beaconDistance = 0.0
+
+    // 감지된 비콘들을 임시로 담을 리스트
+    private val beaconList: MutableList<Beacon> = ArrayList()
+
+    lateinit var handler : Handler
 
     // 화면 생성 부분
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,10 +123,13 @@ class BusActivity : AppCompatActivity(), LocationListener {
             }
         })
         //1. Permission(권한)을 먼저 체크 - 음성기능권한(RECORD_AUDIO), 위치기능권한(ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-        != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+//                || ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED
+//                || ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED
+                )
+        {
             //2. 권한이 없는 경우 권한을 설정하는 메시지를 띄운다.
             permission_state = false
             ActivityCompat.requestPermissions(
@@ -137,7 +144,42 @@ class BusActivity : AppCompatActivity(), LocationListener {
             getLocation()
         }
 
+        //비콘 기능 핸들러 설정
+        // 실제로 비콘을 탐지하기 위한 비콘매니저 객체를 초기화
+        beaconManager = BeaconManager.getInstanceForApplication(this)
+        //        var textView = findViewById<TextView>(R.id.textView)
 
+        // 여기가 중요한데, 기기에 따라서 setBeaconLayout 안의 내용을 바꿔줘야 하는듯 싶다.
+        // 필자의 경우에는 아래처럼 하니 잘 동작했음.
+        beaconManager!!.beaconParsers
+                .add(BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24,d:25-25"))
+
+        // 비콘 탐지를 시작한다. 실제로는 서비스를 시작하는것.
+        beaconManager!!.bind(this)
+
+        handler = object : Handler(Looper.myLooper()!!) {
+            override fun handleMessage(msg: Message) {
+                super.handleMessage(msg)
+
+                Log.d("beacon", "핸들러 진입 / beaconList.size: ${beaconList.size}msg:${msg}")
+
+//                textView.text = ""
+
+                // 비콘의 아이디와 거리를 측정하여 textView에 넣는다.
+                for (beacon in beaconList) {
+                    Log.d("beacon", "포문 진입")
+                    beaconDistance = beacon.distance
+//                    textView.append(
+//                            "ID : " + beacon.id2 + " / " + "Distance : " + String.format(
+//                                    "%.3f",
+//                                    beacon.distance
+//                            ).toDouble() + "m\n"
+//                    )
+                }
+                // 자기 자신을 1초마다 호출
+                this.sendEmptyMessageDelayed(0, 1000)
+            }
+        }
 
         //음성기능 객체 설정
         stt_intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -361,6 +403,38 @@ class BusActivity : AppCompatActivity(), LocationListener {
             }
 
     }
+    override fun onBeaconServiceConnect() {
+        beaconManager!!.removeAllRangeNotifiers()
+        beaconManager!!.addRangeNotifier(object : RangeNotifier {
+            override fun didRangeBeaconsInRegion(beacons: MutableCollection<Beacon>?, region: Region?) {
+                // 비콘이 감지되면 해당 함수가 호출된다. Collection<Beacon> beacons에는 감지된 비콘의 리스트가,
+                // region에는 비콘들에 대응하는 Region 객체가 들어온다.
+                Log.d("mylog", "addRangeNotifier 진입, 사이즈: ${beacons!!.size}")
+                if (beacons!!.size > 0) {
+                    Log.d("mylog", "비콘 감지 OK, size:${beacons!!.size}")
+                }
+                if (beacons.size > 0) {
+                    beaconList.clear()
+                    for (beacon in beacons) {
+                        beaconList.add(beacon)
+                    }
+                }
+            }
+        })
+
+        try{
+            Log.d("mylog", "비콘매니저 monitor실행")
+            beaconManager!!.startRangingBeaconsInRegion(
+                    Region(
+                            "myRangingUniqueId",
+                            null,
+                            null,
+                            null
+                    )
+            )
+        } catch (e: RemoteException) {
+        }
+    }
     //mqtt publish
     fun publish(data: String) {
         //mqttClient 의 publish기능의의 메소드를 호출
@@ -390,6 +464,10 @@ class BusActivity : AppCompatActivity(), LocationListener {
                 ttsObj?.speak("오류로인해 예약취소합니다.", TextToSpeech.QUEUE_FLUSH, null,
                         utteranceId)
             }else if(msgList[1] == "ok"){
+                // 아래에 있는 handleMessage를 부르는 함수. 맨 처음에는 0초간격이지만 한번 호출되고 나면
+                // 1초마다 불러온다.
+                Log.d("beacon", "비콘 실행")
+                handler.sendEmptyMessage(0)
                 buttonId.text = "버스남은시간안내"
                 reservation = msgList[2]
                 var arrival = msgList[3]
@@ -429,7 +507,7 @@ class BusActivity : AppCompatActivity(), LocationListener {
             Log.d("mqtt", "$btnStatus")
             if(msgList[1] == "noticeInfo"){
                 if(msgList[2] == "C"){
-                    ttsObj?.speak("현재방향의 정면에 구조물이 있습니다.", TextToSpeech.QUEUE_FLUSH, null,
+                    ttsObj?.speak("현재방향의 정면 $beaconDistance 미터에 구조물이 있습니다.", TextToSpeech.QUEUE_FLUSH, null,
                             utteranceId)
                 }else if(msgList[2] == "X"){
                     ttsObj?.speak("현재시야에는 구조물이 인식되지 않습니다.", TextToSpeech.QUEUE_FLUSH, null,
@@ -438,10 +516,10 @@ class BusActivity : AppCompatActivity(), LocationListener {
                     ttsObj?.speak("현재방향이 맞습니다. 구조물로 가서 버스진입방향을 응시해주십시오.", TextToSpeech.QUEUE_FLUSH, null,
                             utteranceId)
                 }else if(msgList[2] == "R"){
-                    ttsObj?.speak("오른쪽에 구조물이 있습니다.", TextToSpeech.QUEUE_FLUSH, null,
+                    ttsObj?.speak("오른쪽 $beaconDistance 미터에 구조물이 있습니다.", TextToSpeech.QUEUE_FLUSH, null,
                             utteranceId)
                 }else if(msgList[2] == "L"){
-                    ttsObj?.speak("왼쪽에 구조물이 있습니다.", TextToSpeech.QUEUE_FLUSH, null,
+                    ttsObj?.speak("왼쪽 $beaconDistance 미터에 구조물이 있습니다.", TextToSpeech.QUEUE_FLUSH, null,
                             utteranceId) }
             }else if(msgList[1] == "targetBus"){
                 ttsObj?.speak("해당버스는 ${reservation}번 버스입니다. 탑승해주십시오.", TextToSpeech.QUEUE_FLUSH, null,
@@ -579,6 +657,7 @@ class BusActivity : AppCompatActivity(), LocationListener {
     }
     override fun onDestroy() {
         super.onDestroy()
+        beaconManager!!.unbind(this)
         if (ttsObj != null) {
             ttsObj?.stop()
             ttsObj?.shutdown()
@@ -612,4 +691,5 @@ class BusActivity : AppCompatActivity(), LocationListener {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
+
 }
