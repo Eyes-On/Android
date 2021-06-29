@@ -26,7 +26,6 @@ import org.altbeacon.beacon.*
 import org.eclipse.paho.client.mqttv3.MqttMessage
 import java.io.IOException
 import java.util.*
-import kotlin.math.round
 import kotlin.math.roundToInt
 
 class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
@@ -103,11 +102,11 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
         objintent = intent //인텐드 변수 선언
         obj = objintent.getParcelableExtra<UUID_Parcelable>("uuidObj")!! //UUID_Parcelable 형태값 받아오기
         uuid = obj?.uu_id.toString() //uuid 가져오기
-        mqttClient = MyMqtt(applicationContext, "tcp://13.124.134.89:1883")
+        mqttClient = MyMqtt(applicationContext, "tcp://3.34.96.212:1883")
         locationMgr = getSystemService(LOCATION_SERVICE) as LocationManager //위치서비스 쓸 변수 설정
         try {
             mqttClient.setCallback(::onReceived) // mqtt가 들어오면 onReceived 실행
-            mqttClient.connect(arrayOf<String>("eyeson/busTime")) //eyeson/$uuid로 들어오면 실행
+            mqttClient.connect(arrayOf<String>("eyeson/$uuid")) //eyeson/$uuid로 들어오면 실행
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -122,7 +121,7 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
                 ttsObj?.setSpeechRate(1f) //읽는 속도 설정
             }
         })
-        //1. Permission(권한)을 먼저 체크 - 음성기능권한(RECORD_AUDIO), 위치기능권한(ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION)
+        //1. Permission(권한)을 먼저 체크 - 음성기능권한(RECORD_AUDIO), 위치기능권한(ACCESS_COARSE_LOCATION,ACCESS_FINE_LOCATION), 블루투스기능 권한
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
                 || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
@@ -387,7 +386,6 @@ class BusActivity : AppCompatActivity(), LocationListener, BeaconConsumer {
                     ttsObj?.speak("스마트글래스를 등록해주십시오", TextToSpeech.QUEUE_FLUSH, null,
                             utteranceId)
                 } else {
-                    onDestroy()
                     if (btnStatus == "busTime") {
                         ttsObj?.speak("승차예약을 취소합니다.", TextToSpeech.QUEUE_FLUSH, null,
                                 utteranceId)
